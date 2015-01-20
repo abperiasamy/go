@@ -50,6 +50,7 @@ syntax of package template.  The default output is equivalent to -f
         MFiles         []string // .m source files
         HFiles         []string // .h, .hh, .hpp and .hxx source files
         SFiles         []string // .s source files
+        AsmFiles       []string // .asm source files
         SwigFiles      []string // .swig files
         SwigCXXFiles   []string // .swigcxx files
         SysoFiles      []string // .syso object files to add to archive

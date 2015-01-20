@@ -47,6 +47,7 @@ type Package struct {
 	MFiles         []string `json:",omitempty"` // .m source files
 	HFiles         []string `json:",omitempty"` // .h, .hh, .hpp and .hxx source files
 	SFiles         []string `json:",omitempty"` // .s source files
+	AsmFiles       []string `json:",omitemtpy"` // .asm source files
 	SwigFiles      []string `json:",omitempty"` // .swig files
 	SwigCXXFiles   []string `json:",omitempty"` // .swigcxx files
 	SysoFiles      []string `json:",omitempty"` // .syso system object files added to package
@@ -80,6 +81,7 @@ type Package struct {
 	deps         []*Package
 	gofiles      []string // GoFiles+CgoFiles+TestGoFiles+XTestGoFiles files, absolute paths
 	sfiles       []string
+	asmfiles     []string
 	allgofiles   []string             // gofiles + IgnoredGoFiles, absolute paths
 	target       string               // installed file for this package (may be executable)
 	fake         bool                 // synthesized package
@@ -121,6 +123,7 @@ func (p *Package) copyBuild(pp *build.Package) {
 	p.MFiles = pp.MFiles
 	p.HFiles = pp.HFiles
 	p.SFiles = pp.SFiles
+	p.AsmFiles = pp.AsmFiles
 	p.SwigFiles = pp.SwigFiles
 	p.SwigCXXFiles = pp.SwigCXXFiles
 	p.SysoFiles = pp.SysoFiles
@@ -544,6 +547,12 @@ func (p *Package) load(stk *importStack, bp *build.Package, err error) *Package 
 	}
 	sort.Strings(p.sfiles)
 
+	p.asmfiles = stringList(p.AsmFiles)
+	for i := range p.asmfiles {
+		p.asmfiles[i] = filepath.Join(p.Dir, p.asmfiles[i])
+	}
+	sort.Strings(p.asmfiles)
+
 	p.allgofiles = stringList(p.IgnoredGoFiles)
 	for i := range p.allgofiles {
 		p.allgofiles[i] = filepath.Join(p.Dir, p.allgofiles[i])
@@ -564,6 +573,7 @@ func (p *Package) load(stk *importStack, bp *build.Package, err error) *Package 
 		p.MFiles,
 		p.HFiles,
 		p.SFiles,
+		p.AsmFiles,
 		p.SysoFiles,
 		p.SwigFiles,
 		p.SwigCXXFiles,
@@ -795,7 +805,7 @@ func isStale(p *Package, topRoot map[string]bool) bool {
 		return false
 	}
 
-	srcs := stringList(p.GoFiles, p.CFiles, p.CXXFiles, p.MFiles, p.HFiles, p.SFiles, p.CgoFiles, p.SysoFiles, p.SwigFiles, p.SwigCXXFiles)
+	srcs := stringList(p.GoFiles, p.CFiles, p.CXXFiles, p.MFiles, p.HFiles, p.SFiles, p.AsmFiles, p.CgoFiles, p.SysoFiles, p.SwigFiles, p.SwigCXXFiles)
 	for _, src := range srcs {
 		if olderThan(filepath.Join(p.Dir, src)) {
 			return true

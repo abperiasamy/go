@@ -1015,7 +1015,6 @@ func (b *builder) build(a *action) (err error) {
 		objects = append(objects, out)
 	}
 
-
 	// NOTE(rsc): On Windows, it is critically important that the
 	// gcc-compiled objects (cgoObjects) be listed after the ordinary
 	// objects in the archive.  I do not know why this is.
@@ -2170,23 +2169,29 @@ func (b *builder) yasmCmd(objdir string) []string {
 	case "windows":
 		switch archChar {
 		case "8":
-			assm = append(assm, "-m x86 -f win32")
+			assm = append(assm, "-mx86")
+			assm = append(assm, "-fwin32")
 		case "6":
-			assm = append(assm, "-m amd64 -f win64")
+			assm = append(assm, "-mamd64")
+			assm = append(assm, "-fwin64")
 		}
 	case "darwin":
 		switch archChar {
 		case "8":
-			assm = append(assm, "-m x86 -f macho32")
+			assm = append(assm, "-mx86")
+			assm = append(assm, "-fmacho32")
 		case "6":
-			assm = append(assm, "-m amd64 -f macho64")
+			assm = append(assm, "-mamd64")
+			assm = append(assm, "-fmacho64")
 		}
 	case "linux", "freebsd", "netbsd", "openbsd", "android":
 		switch archChar {
 		case "8":
-			assm = append(assm, "-m x86 -f elf32")
+			assm = append(assm, "-mx86")
+			assm = append(assm, "-felf32")
 		case "6":
-			assm = append(assm, "-mamd64 -felf64")
+			assm = append(assm, "-mamd64")
+			assm = append(assm, "-felf64")
 		}
 	}
 	return assm

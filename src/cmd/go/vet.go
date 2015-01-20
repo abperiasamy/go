@@ -34,7 +34,7 @@ func runVet(cmd *Command, args []string) {
 		// Vet expects to be given a set of files all from the same package.
 		// Run once for package p and once for package p_test.
 		if len(p.GoFiles)+len(p.CgoFiles)+len(p.TestGoFiles) > 0 {
-			runVetFiles(p, stringList(p.GoFiles, p.CgoFiles, p.TestGoFiles, p.SFiles))
+			runVetFiles(p, stringList(p.GoFiles, p.CgoFiles, p.TestGoFiles, p.SFiles, p.AsmFiles))
 		}
 		if len(p.XTestGoFiles) > 0 {
 			runVetFiles(p, stringList(p.XTestGoFiles))
