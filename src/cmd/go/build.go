@@ -832,11 +832,12 @@ func (b *builder) build(a *action) (err error) {
 		}
 	}
 
-	var gofiles, cfiles, sfiles, objects, cgoObjects, pcCFLAGS, pcLDFLAGS []string
+	var gofiles, cfiles, sfiles, asmfiles, objects, cgoObjects, pcCFLAGS, pcLDFLAGS []string
 
 	gofiles = append(gofiles, a.p.GoFiles...)
 	cfiles = append(cfiles, a.p.CFiles...)
 	sfiles = append(sfiles, a.p.SFiles...)
+	asmfiles = append(asmfiles, a.p.AsmFiles...)
 
 	if a.p.usesCgo() || a.p.usesSwig() {
 		if pcCFLAGS, pcLDFLAGS, err = b.getPkgConfigFlags(a.p); err != nil {
@@ -1004,6 +1005,16 @@ func (b *builder) build(a *action) (err error) {
 		}
 		objects = append(objects, out)
 	}
+
+	// Assemble .asm files.
+	for _, file := range asmfiles {
+		out := file[:len(file)-len(".asm")] + "." + objExt
+		if err := buildToolchain.asm(b, a.p, obj, obj+out, file); err != nil {
+			return err
+		}
+		objects = append(objects, out)
+	}
+
 
 	// NOTE(rsc): On Windows, it is critically important that the
 	// gcc-compiled objects (cgoObjects) be listed after the ordinary
@@ -1643,7 +1654,7 @@ func (gcToolchain) gc(b *builder, p *Package, archive, obj string, asmhdr bool, 
 	// so that it can give good error messages about forward declarations.
 	// Exceptions: a few standard packages have forward declarations for
 	// pieces supplied behind-the-scenes by package runtime.
-	extFiles := len(p.CgoFiles) + len(p.CFiles) + len(p.CXXFiles) + len(p.MFiles) + len(p.SFiles) + len(p.SysoFiles) + len(p.SwigFiles) + len(p.SwigCXXFiles)
+	extFiles := len(p.CgoFiles) + len(p.CFiles) + len(p.CXXFiles) + len(p.MFiles) + len(p.SFiles) + len(p.AsmFiles) + len(p.SysoFiles) + len(p.SwigFiles) + len(p.SwigCXXFiles)
 	if p.Standard {
 		switch p.ImportPath {
 		case "bytes", "net", "os", "runtime/pprof", "sync", "time":
@@ -1672,11 +1683,20 @@ func (gcToolchain) gc(b *builder, p *Package, archive, obj string, asmhdr bool, 
 	return ofile, output, err
 }
 
-func (gcToolchain) asm(b *builder, p *Package, obj, ofile, sfile string) error {
+func (gcToolchain) asm(b *builder, p *Package, obj, ofile, asmfile string) error {
+	asmfile = mkAbs(p.Dir, asmfile)
+	defs := []string{"-D", "GOOS_" + goos, "-D", "GOARCH_" + goarch}
+
+	// If asmfile contains .asm files, use yasm instead.
+	if strings.HasSuffix(asmfile, ".asm") {
+		return b.yasm(p, ofile, defs, asmfile)
+	}
+
 	// Add -I pkg/GOOS_GOARCH so #include "textflag.h" works in .s files.
 	inc := filepath.Join(goroot, "pkg", fmt.Sprintf("%s_%s", goos, goarch))
-	sfile = mkAbs(p.Dir, sfile)
-	return b.run(p.Dir, p.ImportPath, nil, tool(archChar+"a"), "-trimpath", b.work, "-I", obj, "-I", inc, "-o", ofile, "-D", "GOOS_"+goos, "-D", "GOARCH_"+goarch, sfile)
+
+	// Proceed with default go tool's assembler.
+	return b.run(p.Dir, p.ImportPath, nil, tool(archChar+"a"), "-trimpath", b.work, "-I", obj, "-I", inc, "-o", ofile, defs, asmfile)
 }
 
 func (gcToolchain) pkgpath(basedir string, p *Package) string {
@@ -1871,14 +1891,21 @@ func (gccgoToolchain) gc(b *builder, p *Package, archive, obj string, asmhdr boo
 	return ofile, output, err
 }
 
-func (gccgoToolchain) asm(b *builder, p *Package, obj, ofile, sfile string) error {
-	sfile = mkAbs(p.Dir, sfile)
+func (gccgoToolchain) asm(b *builder, p *Package, obj, ofile, asmfile string) error {
+	asmfile = mkAbs(p.Dir, asmfile)
 	defs := []string{"-D", "GOOS_" + goos, "-D", "GOARCH_" + goarch}
 	if pkgpath := gccgoCleanPkgpath(p); pkgpath != "" {
 		defs = append(defs, `-D`, `GOPKGPATH="`+pkgpath+`"`)
 	}
 	defs = append(defs, b.gccArchArgs()...)
-	return b.run(p.Dir, p.ImportPath, nil, gccgoName, "-I", obj, "-o", ofile, defs, sfile)
+
+	// If asmfile contains .asm files, use yasm instead.
+	if strings.HasSuffix(asmfile, ".asm") {
+		return b.yasm(p, ofile, defs, asmfile)
+	}
+
+	// Proceed with default go tool's assembler.
+	return b.run(p.Dir, p.ImportPath, nil, gccgoName, "-I", obj, "-o", ofile, defs, asmfile)
 }
 
 func (gccgoToolchain) pkgpath(basedir string, p *Package) string {
@@ -2125,6 +2152,44 @@ func (b *builder) gccArchArgs() []string {
 		return []string{"-marm"} // not thumb
 	}
 	return nil
+}
+
+// yasm runs the "yasm" assembler to create an object from a single .asm file.
+func (b *builder) yasm(p *Package, out string, flags []string, asmfile string) error {
+	asmfile = mkAbs(p.Dir, asmfile)
+	return b.run(p.Dir, p.ImportPath, nil, b.yasmCmd(p.Dir), flags, "-o", out, asmfile)
+}
+
+// yasmCmd returns a yasm command line prefix.
+func (b *builder) yasmCmd(objdir string) []string {
+	// NOTE: use "yasm" by default if YASM  env is not set to a compatible assembler.
+	assm := append(envList("YASM", "yasm"))
+
+	// Yasm supports only two machine architectures [x86 and amd64].
+	switch goos {
+	case "windows":
+		switch archChar {
+		case "8":
+			assm = append(assm, "-m x86 -f win32")
+		case "6":
+			assm = append(assm, "-m amd64 -f win64")
+		}
+	case "darwin":
+		switch archChar {
+		case "8":
+			assm = append(assm, "-m x86 -f macho32")
+		case "6":
+			assm = append(assm, "-m amd64 -f macho64")
+		}
+	case "linux", "freebsd", "netbsd", "openbsd", "android":
+		switch archChar {
+		case "8":
+			assm = append(assm, "-m x86 -f elf32")
+		case "6":
+			assm = append(assm, "-mamd64 -felf64")
+		}
+	}
+	return assm
 }
 
 // envList returns the value of the given environment variable broken

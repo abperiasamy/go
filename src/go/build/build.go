@@ -370,6 +370,7 @@ type Package struct {
 	MFiles         []string // .m (Objective-C) source files
 	HFiles         []string // .h, .hh, .hpp and .hxx source files
 	SFiles         []string // .s source files
+	AsmFiles       []string // .asm source files
 	SwigFiles      []string // .swig files
 	SwigCXXFiles   []string // .swigcxx files
 	SysoFiles      []string // .syso system object files to add to archive
@@ -445,7 +446,7 @@ func nameExt(name string) string {
 // using a standard import path, the returned package will set p.ImportPath
 // to that path.
 //
-// In the directory containing the package, .go, .c, .h, and .s files are
+// In the directory containing the package, .go, .c, .h, .s and .asm files are
 // considered part of the package except for:
 //
 //	- .go files in package documentation
@@ -652,6 +653,9 @@ Found:
 			continue
 		case ".S":
 			Sfiles = append(Sfiles, name)
+			continue
+		case ".asm":
+			p.AsmFiles = append(p.AsmFiles, name)
 			continue
 		case ".swig":
 			p.SwigFiles = append(p.SwigFiles, name)
@@ -942,7 +946,7 @@ func (ctxt *Context) matchFile(dir, name string, returnImports bool, allTags map
 	}
 
 	switch ext {
-	case ".go", ".c", ".cc", ".cxx", ".cpp", ".m", ".s", ".h", ".hh", ".hpp", ".hxx", ".S", ".swig", ".swigcxx":
+	case ".go", ".c", ".cc", ".cxx", ".cpp", ".m", ".s", ".h", ".hh", ".hpp", ".hxx", ".S", ".asm", ".swig", ".swigcxx":
 		// tentatively okay - read to make sure
 	case ".syso":
 		// binary, no reading
