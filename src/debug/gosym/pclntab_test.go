@@ -45,11 +45,11 @@ func dotest(self bool) bool {
 	if strings.Contains(pclineTempDir, " ") {
 		panic("unexpected space in tempdir")
 	}
-	// This command builds pclinetest from pclinetest.asm;
-	// the resulting binary looks like it was built from pclinetest.s,
+	// This command builds pclinetest from pclinetest.S;
+	// the resulting binary looks like it was built from pclinetest.S,
 	// but we have renamed it to keep it away from the go tool.
 	pclinetestBinary = filepath.Join(pclineTempDir, "pclinetest")
-	command := fmt.Sprintf("go tool 6a -o %s.6 pclinetest.asm && go tool 6l -H linux -E main -o %s %s.6",
+	command := fmt.Sprintf("go tool 6a -o %s.6 pclinetest.S && go tool 6l -H linux -E main -o %s %s.6",
 		pclinetestBinary, pclinetestBinary, pclinetestBinary)
 	cmd := exec.Command("sh", "-c", command)
 	cmd.Stdout = os.Stdout
@@ -231,8 +231,8 @@ func TestPCLine(t *testing.T) {
 		file, line, fn := tab.PCToLine(pc)
 		if fn == nil {
 			t.Errorf("failed to get line of PC %#x", pc)
-		} else if !strings.HasSuffix(file, "pclinetest.asm") || line != wantLine || fn != sym {
-			t.Errorf("PCToLine(%#x) = %s:%d (%s), want %s:%d (%s)", pc, file, line, fn.Name, "pclinetest.asm", wantLine, sym.Name)
+		} else if !strings.HasSuffix(file, "pclinetest.S") || line != wantLine || fn != sym {
+			t.Errorf("PCToLine(%#x) = %s:%d (%s), want %s:%d (%s)", pc, file, line, fn.Name, "pclinetest.S", wantLine, sym.Name)
 		}
 	}
 
