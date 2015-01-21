@@ -2169,29 +2169,23 @@ func (b *builder) yasmCmd(objdir string) []string {
 	case "windows":
 		switch archChar {
 		case "8":
-			assm = append(assm, "-mx86")
-			assm = append(assm, "-fwin32")
+			assm = append(assm, "-mx86", "-fwin32")
 		case "6":
-			assm = append(assm, "-mamd64")
-			assm = append(assm, "-fwin64")
+			assm = append(assm, "-mamd64", "-fwin64")
 		}
 	case "darwin":
 		switch archChar {
 		case "8":
-			assm = append(assm, "-mx86")
-			assm = append(assm, "-fmacho32")
+			assm = append(assm, "-mx86", "-fmacho32")
 		case "6":
-			assm = append(assm, "-mamd64")
-			assm = append(assm, "-fmacho64")
+			assm = append(assm, "-mamd64", "-fmacho64")
 		}
 	case "linux", "freebsd", "netbsd", "openbsd", "android":
 		switch archChar {
 		case "8":
-			assm = append(assm, "-mx86")
-			assm = append(assm, "-felf32")
+			assm = append(assm, "-mx86", "-felf32")
 		case "6":
-			assm = append(assm, "-mamd64")
-			assm = append(assm, "-felf64")
+			assm = append(assm, "-mamd64", "-felf64")
 		}
 	}
 	return assm
