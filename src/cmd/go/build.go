@@ -794,6 +794,10 @@ func (b *builder) build(a *action) (err error) {
 		return fmt.Errorf("can't build package %s because it contains Objective-C files (%s) but it's not using cgo nor SWIG",
 			a.p.ImportPath, strings.Join(a.p.MFiles, ","))
 	}
+	if len(a.p.AsmFiles) > 0 && !a.p.usesCgo() && !a.p.usesSwig() {
+		return fmt.Errorf("can't build package %s because it contains YASM assembly files (%s) but it's not using cgo nor SWIG",
+			a.p.ImportPath, strings.Join(a.p.AsmFiles, ","))
+	}
 	defer func() {
 		if err != nil && err != errPrintedOutput {
 			err = fmt.Errorf("go build %s: %v", a.p.ImportPath, err)
@@ -874,7 +878,7 @@ func (b *builder) build(a *action) (err error) {
 		if a.cgo != nil && a.cgo.target != "" {
 			cgoExe = a.cgo.target
 		}
-		outGo, outObj, err := b.cgo(a.p, cgoExe, obj, pcCFLAGS, pcLDFLAGS, gccfiles, a.p.CXXFiles, a.p.MFiles)
+		outGo, outObj, err := b.cgo(a.p, cgoExe, obj, pcCFLAGS, pcLDFLAGS, gccfiles, a.p.CXXFiles, a.p.MFiles, a.p.AsmFiles)
 		if err != nil {
 			return err
 		}
@@ -887,7 +891,7 @@ func (b *builder) build(a *action) (err error) {
 		// In a package using SWIG, any .c or .s files are
 		// compiled with gcc.
 		gccfiles := append(cfiles, sfiles...)
-		cxxfiles, mfiles := a.p.CXXFiles, a.p.MFiles
+		cxxfiles, mfiles, asmfiles := a.p.CXXFiles, a.p.MFiles, a.p.AsmFiles
 		cfiles = nil
 		sfiles = nil
 
@@ -896,9 +900,10 @@ func (b *builder) build(a *action) (err error) {
 			cxxfiles = nil
 			gccfiles = nil
 			mfiles = nil
+			asmfiles = nil
 		}
 
-		outGo, outObj, err := b.swig(a.p, obj, pcCFLAGS, gccfiles, cxxfiles, mfiles)
+		outGo, outObj, err := b.swig(a.p, obj, pcCFLAGS, gccfiles, cxxfiles, mfiles, asmfiles)
 		if err != nil {
 			return err
 		}
@@ -2223,7 +2228,7 @@ var (
 	cgoLibGccFileOnce sync.Once
 )
 
-func (b *builder) cgo(p *Package, cgoExe, obj string, pcCFLAGS, pcLDFLAGS, gccfiles, gxxfiles, mfiles []string) (outGo, outObj []string, err error) {
+func (b *builder) cgo(p *Package, cgoExe, obj string, pcCFLAGS, pcLDFLAGS, gccfiles, gxxfiles, mfiles, asmfiles []string) (outGo, outObj []string, err error) {
 	cgoCPPFLAGS, cgoCFLAGS, cgoCXXFLAGS, cgoLDFLAGS := b.cflags(p, true)
 	_, cgoexeCFLAGS, _, _ := b.cflags(p, false)
 	cgoCPPFLAGS = append(cgoCPPFLAGS, pcCFLAGS...)
@@ -2384,6 +2389,16 @@ func (b *builder) cgo(p *Package, cgoExe, obj string, pcCFLAGS, pcLDFLAGS, gccfi
 		outObj = append(outObj, ofile)
 	}
 
+	for _, file := range asmfiles {
+		// Append .o to the file, just in case the pkg has file.c and file.asm
+		ofile := obj + cgoRe.ReplaceAllString(file, "_") + ".o"
+		if err := b.yasm(p, ofile, envList("YASMFLAGS", ""), file); err != nil {
+			return nil, nil, err
+		}
+		linkobj = append(linkobj, ofile)
+		outObj = append(outObj, ofile)
+	}
+
 	linkobj = append(linkobj, p.SysoFiles...)
 	dynobj := obj + "_cgo_.o"
 	pie := goarch == "arm" && (goos == "linux" || goos == "android")
@@ -2453,7 +2468,7 @@ func (b *builder) cgo(p *Package, cgoExe, obj string, pcCFLAGS, pcLDFLAGS, gccfi
 // Run SWIG on all SWIG input files.
 // TODO: Don't build a shared library, once SWIG emits the necessary
 // pragmas for external linking.
-func (b *builder) swig(p *Package, obj string, pcCFLAGS, gccfiles, gxxfiles, mfiles []string) (outGo, outObj []string, err error) {
+func (b *builder) swig(p *Package, obj string, pcCFLAGS, gccfiles, gxxfiles, mfiles, asmfiles []string) (outGo, outObj []string, err error) {
 	cgoCPPFLAGS, cgoCFLAGS, cgoCXXFLAGS, _ := b.cflags(p, true)
 	cflags := stringList(cgoCPPFLAGS, cgoCFLAGS)
 	cxxflags := stringList(cgoCPPFLAGS, cgoCXXFLAGS)
@@ -2479,6 +2494,16 @@ func (b *builder) swig(p *Package, obj string, pcCFLAGS, gccfiles, gxxfiles, mfi
 		// Append .o to the file, just in case the pkg has file.c and file.cpp
 		ofile := obj + cgoRe.ReplaceAllString(file, "_") + ".o"
 		if err := b.gcc(p, ofile, cflags, file); err != nil {
+			return nil, nil, err
+		}
+		outObj = append(outObj, ofile)
+	}
+
+	for _, file := range asmfiles {
+		// Append .o to the file, just in case the pkg has file.c and file.asm
+		ofile := obj + cgoRe.ReplaceAllString(file, "_") + ".o"
+		if err := b.yasm(p, ofile, envList("YASMFLAGS", ""), file); err != nil {
+			fmt.Println("ERROR TRACE 2420 cgo(..): ", file, ofile, obj, err)
 			return nil, nil, err
 		}
 		outObj = append(outObj, ofile)
