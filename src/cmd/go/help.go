@@ -20,9 +20,13 @@ extension will be passed to SWIG.  Any file with a .swigcxx extension
 will be passed to SWIG with the -c++ option.
 
 When either cgo or SWIG is used, go build will pass any .c, .m, .s,
-or .S files to the C compiler, and any .cc, .cpp, .cxx files to the C++
-compiler.  The CC or CXX environment variables may be set to determine
-the C or C++ compiler, respectively, to use.
+or .S files to the C compiler, any .cc, .cpp, .cxx files to the C++
+compiler and .asm to the yasm assembler.  The CC or CXX environment
+variables may be set to determine the C or C++ compiler, respectively,
+to use.  YASM environment variable may be set to determine the yasm
+comatible assembler, respectively, to use. YASMFLAGS build flags,
+YASMFORMAT object format and YASMMACHINE target machine architecture
+are optional environment variables.
 	`,
 }
 
@@ -349,6 +353,10 @@ the extension of the file name. These extensions are:
 		OS-native assembler (typically gcc (sic)); otherwise they
 		will be assembled with the Go-specific support assembler,
 		5a, 6a, or 8a, etc., as appropriate.
+	.asm
+		Yasm assembler source files.
+		Yasm currently supports NASM and GAS assembler syntaxes
+		for x86 and amd64 architectures.
 	.swig, .swigcxx
 		SWIG definition files.
 	.syso

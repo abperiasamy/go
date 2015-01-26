@@ -2165,40 +2165,39 @@ func (b *builder) gccArchArgs() []string {
 
 // yasm runs the "yasm" assembler to create an object from a single .asm file.
 func (b *builder) yasm(p *Package, out string, flags []string, asmfile string) error {
+	// NOTE: use "yasm" by default if YASM  env is not set to a compatible assembler.
+	yasmcmd := envList("YASM", "yasm")
 	asmfile = mkAbs(p.Dir, asmfile)
-	return b.run(p.Dir, p.ImportPath, nil, b.yasmCmd(p.Dir), flags, "-o", out, asmfile)
+	return b.run(p.Dir, p.ImportPath, nil, yasmcmd, flags, b.yasmArchArgs(), "-o", out, asmfile)
 }
 
-// yasmCmd returns a yasm command line prefix.
-func (b *builder) yasmCmd(objdir string) []string {
-	// NOTE: use "yasm" by default if YASM  env is not set to a compatible assembler.
-	assm := append(envList("YASM", "yasm"))
-
+// yasmArchArgs returns arguments to pass to yasm based on the architecture.
+func (b *builder) yasmArchArgs() []string {
 	// Yasm supports only two machine architectures [x86 and amd64].
 	switch goos {
 	case "windows":
 		switch archChar {
 		case "8":
-			assm = append(assm, "-mx86", "-fwin32")
+			return stringList(envList("YASMMACH", "-mx86"), envList("YASMFORMAT", "-fwin32"))
 		case "6":
-			assm = append(assm, "-mamd64", "-fwin64")
+			return stringList(envList("YASMMACH", "-mamd64"), envList("YASMFORMAT", "-fwin64"))
 		}
 	case "darwin":
 		switch archChar {
 		case "8":
-			assm = append(assm, "-mx86", "-fmacho32")
+			return stringList(envList("YASMMACH", "-mx86"), envList("YASMFORMAT", "-fmacho32"))
 		case "6":
-			assm = append(assm, "-mamd64", "-fmacho64")
+			return stringList(envList("YASMMACH", "-mamd64"), envList("YASMFORMAT", "-fmacho64"))
 		}
 	case "linux", "freebsd", "netbsd", "openbsd", "android":
 		switch archChar {
 		case "8":
-			assm = append(assm, "-mx86", "-felf32")
+			return stringList(envList("YASMMACH", "-mx86"), envList("YASMFORMAT", "-felf32"))
 		case "6":
-			assm = append(assm, "-mamd64", "-felf64")
+			return stringList(envList("YASMMACH", "-mamd64"), envList("YASMFORMAT", "-felf64"))
 		}
 	}
-	return assm
+	return nil
 }
 
 // envList returns the value of the given environment variable broken
@@ -2238,6 +2237,8 @@ func (b *builder) cgo(p *Package, cgoExe, obj string, pcCFLAGS, pcLDFLAGS, gccfi
 	_, cgoexeCFLAGS, _, _ := b.cflags(p, false)
 	cgoCPPFLAGS = append(cgoCPPFLAGS, pcCFLAGS...)
 	cgoLDFLAGS = append(cgoLDFLAGS, pcLDFLAGS...)
+	asmYASMFLAGS := envList("YASMFLAGS", "")
+
 	// If we are compiling Objective-C code, then we need to link against libobjc
 	if len(mfiles) > 0 {
 		cgoLDFLAGS = append(cgoLDFLAGS, "-lobjc")
@@ -2397,7 +2398,7 @@ func (b *builder) cgo(p *Package, cgoExe, obj string, pcCFLAGS, pcLDFLAGS, gccfi
 	for _, file := range asmfiles {
 		// Append .o to the file, just in case the pkg has file.c and file.asm
 		ofile := obj + cgoRe.ReplaceAllString(file[:len(file)-3], "_") + "o"
-		if err := b.yasm(p, ofile, envList("YASMFLAGS", ""), file); err != nil {
+		if err := b.yasm(p, ofile, asmYASMFLAGS, file); err != nil {
 			return nil, nil, err
 		}
 		linkobj = append(linkobj, ofile)
@@ -2477,6 +2478,7 @@ func (b *builder) swig(p *Package, obj string, pcCFLAGS, gccfiles, gxxfiles, mfi
 	cgoCPPFLAGS, cgoCFLAGS, cgoCXXFLAGS, _ := b.cflags(p, true)
 	cflags := stringList(cgoCPPFLAGS, cgoCFLAGS)
 	cxxflags := stringList(cgoCPPFLAGS, cgoCXXFLAGS)
+	asmYASMFLAGS := envList("YASMFLAGS", "")
 
 	for _, file := range gccfiles {
 		ofile := obj + cgoRe.ReplaceAllString(file[:len(file)-1], "_") + "o"
@@ -2506,8 +2508,8 @@ func (b *builder) swig(p *Package, obj string, pcCFLAGS, gccfiles, gxxfiles, mfi
 
 	for _, file := range asmfiles {
 		// Append .o to the file, just in case the pkg has file.c and file.asm
-		ofile := obj + cgoRe.ReplaceAllString(file, "_") + ".o"
-		if err := b.yasm(p, ofile, envList("YASMFLAGS", ""), file); err != nil {
+		ofile := obj + cgoRe.ReplaceAllString(file[:len(file)-3], "_") + "o"
+		if err := b.yasm(p, ofile, asmYASMFLAGS, file); err != nil {
 			return nil, nil, err
 		}
 		outObj = append(outObj, ofile)
