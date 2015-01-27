@@ -64,5 +64,6 @@ func TestReturnAfterGrow(t *testing.T)       { testReturnAfterGrow(t) }
 func TestReturnAfterGrowFromGo(t *testing.T) { testReturnAfterGrowFromGo(t) }
 func Test9026(t *testing.T)                  { test9026(t) }
 func Test9557(t *testing.T)                  { test9557(t) }
+func Test9699(t *testing.T)                  { test9699(t) }
 
 func BenchmarkCgoCall(b *testing.B) { benchCgoCall(b) }
